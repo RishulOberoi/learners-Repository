@@ -13,7 +13,7 @@ nltk.download('punkt')
 
 from transformers import pipeline
 
-# Load summarizer and expander only once
+# Load summarizer and expander only once (cache for Streamlit)
 @st.cache_resource
 def load_summarizer():
     return pipeline("summarization", model="facebook/bart-large-cnn")
@@ -28,8 +28,9 @@ expander = load_expander()
 def remove_unwanted_phrases(text):
     unwanted_phrases = [
         "For confidential support call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org.",
-        "For confidential support, call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org.",
         "For confidential support call the Samaritans on 08457 90 90, visit a local Samaritans branch or see www.samaritans.org.",
+        "For confidential support, call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org.",
+        "For confidential support, call the Samaritans on 08457 90 90, visit a local Samaritans branch or see www.samaritans.org.",
         "For confidential support call the Samaritans in the UK on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org for details.",
         "For confidential support, call the Samaritans in the UK on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org for details.",
         "For confidential support call the Samaritans",

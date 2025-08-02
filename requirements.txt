@@ -1,0 +1,9 @@
+streamlit
+pandas
+python-pptx
+pillow
+requests
+transformers
+torch
+openpyxl
+nltk

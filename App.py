@@ -46,12 +46,8 @@ def remove_unwanted_phrases(text):
 def summarize_text(text):
     try:
         summary = summarizer(
-            text,
-            max_length=300,
-            min_length=100,
-            length_penalty=0.9,
-            no_repeat_ngram_size=3,
-            do_sample=False
+            text, max_length=300, min_length=100, length_penalty=0.9,
+            no_repeat_ngram_size=3, do_sample=False
         )
         result = summary[0]['summary_text'].strip()
         return remove_unwanted_phrases(result)
@@ -122,6 +118,8 @@ def add_image_autofit(slide, image_path, left_inches, top_inches, width_inches, 
         st.warning(f"Could not add image {image_path}: {e}")
 
 def create_slide(prs, title, content_bullets, image_path=None):
+    if not isinstance(title, str) or title.strip() == "" or pd.isna(title):
+        title = "Untitled Slide"
     slide_layout = prs.slide_layouts[1]
     slide = prs.slides.add_slide(slide_layout)
     title_shape = slide.shapes.title
@@ -240,17 +238,49 @@ if uploaded_file:
 
     if st.button("Generate Powerpoint"):
         prs = Presentation()
-        for idx, row in df.iterrows():
-            title = str(row.get('Title', 'Untitled Slide'))
-            content_raw = str(row.get('Content', ''))
-            content_used = decide_enrichment(title, content_raw)
-            bullets = parse_content_to_bullets(content_used)
-            image_path = row.get('Image', None)
-            create_slide(prs, title, bullets, image_path)
+        cols_lower = set(c.lower() for c in df.columns)
+        if 'title' in cols_lower and 'content' in cols_lower:
+            for idx, row in df.iterrows():
+                title_raw = row.get('Title') or row.get('title') or 'Untitled Slide'
+                title = str(title_raw) if not pd.isna(title_raw) else 'Untitled Slide'
+
+                content_raw_val = row.get('Content') or row.get('content') or ''
+                content_raw = str(content_raw_val) if not pd.isna(content_raw_val) else ''
+
+                content_used = decide_enrichment(title, content_raw)
+                bullets = parse_content_to_bullets(content_used)
+
+                image_path_val = row.get('Image') or row.get('image') or None
+                image_path = image_path_val if (image_path_val and not pd.isna(image_path_val)) else None
+
+                create_slide(prs, title, bullets, image_path)
+        else:
+            # For generic tabular data, create a single table slide
+            slide = prs.slides.add_slide(prs.slide_layouts[5])  # Title-only layout
+            slide.shapes.title.text = "Table View"
+            rows, cols = df.shape
+            left = Inches(0.5)
+            top = Inches(1.5)
+            width = Inches(9)
+            height = Inches(5)
+            table = slide.shapes.add_table(rows + 1, cols, left, top, width, height).table
+            # Add headers
+            for c, name in enumerate(df.columns):
+                table.cell(0, c).text = str(name)
+            # Add data
+            for r in range(rows):
+                for c in range(cols):
+                    table.cell(r + 1, c).text = str(df.iat[r, c])
+
         pptx_file = "Powerpoint Generator.pptx"
         prs.save(pptx_file)
         with open(pptx_file, "rb") as f:
-            st.download_button("Download Powerpoint", f, file_name=pptx_file, mime='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+            st.download_button(
+                "Download Powerpoint",
+                f,
+                file_name=pptx_file,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )
         st.success("Presentation generated and ready for download!")
 
 st.caption("Expand, summarize, and generate *beautiful presentations* from structured data – fully within your browser.")

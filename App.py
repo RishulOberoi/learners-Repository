@@ -9,11 +9,10 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_PARAGRAPH_ALIGNMENT
 from PIL import Image
 import nltk
-nltk.download('punkt')
 
+nltk.download('punkt')
 from transformers import pipeline
 
-# Load summarizer and expander only once (cache for Streamlit)
 @st.cache_resource
 def load_summarizer():
     return pipeline("summarization", model="facebook/bart-large-cnn")
@@ -40,7 +39,6 @@ def remove_unwanted_phrases(text):
     ]
     for phrase in unwanted_phrases:
         text = text.replace(phrase, "")
-    # Catch other possible forms
     text = re.sub(r'\bFor confidential support.*?samaritans\.org\.?', '', text, flags=re.IGNORECASE)
     text = re.sub(r'contact (us|this) .*?samaritans\.org\.?', '', text, flags=re.IGNORECASE)
     return text.strip()
@@ -48,8 +46,12 @@ def remove_unwanted_phrases(text):
 def summarize_text(text):
     try:
         summary = summarizer(
-            text, max_length=300, min_length=100, length_penalty=0.9,
-            no_repeat_ngram_size=3, do_sample=False
+            text,
+            max_length=300,
+            min_length=100,
+            length_penalty=0.9,
+            no_repeat_ngram_size=3,
+            do_sample=False
         )
         result = summary[0]['summary_text'].strip()
         return remove_unwanted_phrases(result)
@@ -96,7 +98,6 @@ def add_image_autofit(slide, image_path, left_inches, top_inches, width_inches, 
         img_height_in = img_h / dpi
         box_aspect = width_inches / height_inches
         img_aspect = img_width_in / img_height_in
-
         if img_aspect > box_aspect:
             final_width = max(min(width_inches, img_width_in), min_size)
             final_height = final_width / img_aspect
@@ -109,12 +110,9 @@ def add_image_autofit(slide, image_path, left_inches, top_inches, width_inches, 
             if final_width < min_size:
                 final_width = min_size
                 final_height = final_width / img_aspect
-
         pos_left = left_inches + max((width_inches - final_width) / 2, 0)
         pos_top = top_inches + max((height_inches - final_height) / 2, 0)
-
         img_obj = io.BytesIO(resp.content) if str(image_path).startswith('http') else image_path
-
         slide.shapes.add_picture(
             img_obj,
             Inches(pos_left), Inches(pos_top),
@@ -137,7 +135,6 @@ def create_slide(prs, title, content_bullets, image_path=None):
     margin = 0.5
     gap = 0.3
     MAX_BULLETS = 10
-
     if image_path and str(image_path).strip():
         img_area_width = max(slide_width_in * 0.38, 2.5)
         text_area_width = slide_width_in - img_area_width - gap - 2 * margin
@@ -225,7 +222,15 @@ uploaded_file = st.file_uploader("Upload CSV or Excel for your slides", type=["c
 
 if uploaded_file:
     if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
+        try:
+            df = pd.read_csv(uploaded_file, encoding='utf-8')
+        except UnicodeDecodeError:
+            uploaded_file.seek(0)
+            try:
+                df = pd.read_csv(uploaded_file, encoding='utf-16')
+            except UnicodeDecodeError:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, encoding='latin1')
     else:
         df = pd.read_excel(uploaded_file)
 
@@ -247,4 +252,5 @@ if uploaded_file:
         with open(pptx_file, "rb") as f:
             st.download_button("Download Powerpoint", f, file_name=pptx_file, mime='application/vnd.openxmlformats-officedocument.presentationml.presentation')
         st.success("Presentation generated and ready for download!")
-    st.caption("Expand, summarize, and generate *beautiful presentations* from structured data – fully within your browser.")
+
+st.caption("Expand, summarize, and generate *beautiful presentations* from structured data – fully within your browser.")

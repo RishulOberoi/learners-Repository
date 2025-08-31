@@ -1,9 +1,8 @@
-streamlit
+flask
 pandas
 python-pptx
 pillow
 requests
+nltk
 transformers
 torch
-openpyxl
-nltk

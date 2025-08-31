@@ -1,1 +1,352 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerPoint Generator - AI-Powered PPTX from Tabular Data</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .upload-area {
+            border: 3px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #0056b3;
+            background-color: #e3f2fd;
+        }
+        .upload-area.dragover {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .progress {
+            height: 25px;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 0;
+        }
+        .feature-icon {
+            font-size: 3rem;
+            color: #007bff;
+            margin-bottom: 1rem;
+        }
+        .btn-generate {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            border: none;
+            padding: 12px 30px;
+            font-weight: bold;
+        }
+        .btn-generate:hover {
+            background: linear-gradient(45deg, #218838, #1ba085);
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="display-4 fw-bold mb-3">PowerPoint Generator</h1>
+                    <p class="lead">AI-Powered PPTX from Tabular Data</p>
+                    <p>Transform your Excel/CSV data into beautiful presentations with automatic content summarization and expansion.</p>
+                </div>
+                <div class="col-lg-4 text-center">
+                    <i class="fas fa-file-powerpoint" style="font-size: 8rem; opacity: 0.7;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container my-5">
+        <!-- Features -->
+        <div class="row mb-5">
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-brain feature-icon"></i>
+                <h4>AI-Powered</h4>
+                <p>Automatically summarizes long content and expands short content using advanced AI models.</p>
+            </div>
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-images feature-icon"></i>
+                <h4>Image Support</h4>
+                <p>Automatically includes and resizes images from URLs or local paths in your data.</p>
+            </div>
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-magic feature-icon"></i>
+                <h4>Beautiful Design</h4>
+                <p>Creates professionally formatted slides with proper typography and layout.</p>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Your Data</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-primary"></i>
+                            <h4>Drop your file here or click to browse</h4>
+                            <p class="text-muted">Supports CSV and Excel files (.csv, .xlsx, .xls)</p>
+                            <button class="btn btn-primary btn-lg" onclick="document.getElementById('fileInput').click();">
+                                <i class="fas fa-file me-2"></i>Choose File
+                            </button>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="progress mt-3" id="progressBar" style="display: none;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        
+                        <!-- Status Messages -->
+                        <div id="statusMessage" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <!-- Data Preview -->
+                <div class="card shadow mt-4" id="previewCard" style="display: none;">
+                    <div class="card-header bg-success text-white">
+                        <h4 class="mb-0"><i class="fas fa-table me-2"></i>Data Preview</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container" id="tableContainer"></div>
+                        <div class="mt-3">
+                            <p><strong>Columns:</strong> <span id="columnCount"></span></p>
+                            <p><strong>Rows:</strong> <span id="rowCount"></span></p>
+                        </div>
+                        <div class="text-center mt-4">
+                            <button class="btn btn-generate btn-lg" id="generateBtn">
+                                <i class="fas fa-cogs me-2"></i>Generate PowerPoint
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="row mt-5">
+            <div class="col-lg-10 mx-auto">
+                <div class="card">
+                    <div class="card-header">
+                        <h4><i class="fas fa-info-circle me-2"></i>How It Works</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>For Slide-Based Data:</h5>
+                                <p>Include these columns in your CSV/Excel:</p>
+                                <ul>
+                                    <li><strong>Title:</strong> Slide title</li>
+                                    <li><strong>Content:</strong> Slide content (will be auto-processed)</li>
+                                    <li><strong>Image:</strong> (Optional) Image URL or path</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>For Tabular Data:</h5>
+                                <p>Any CSV/Excel file without Title/Content columns will be converted to a table slide.</p>
+                                <h5>AI Processing:</h5>
+                                <ul>
+                                    <li>Short content (&lt;80 chars) gets expanded</li>
+                                    <li>Long content (&gt;100 chars) gets summarized</li>
+                                    <li>Medium content is used as-is</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white text-center py-4 mt-5">
+        <div class="container">
+            <p class="mb-0">Expand, summarize, and generate beautiful presentations from structured data – fully within your browser.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedFile = null;
+
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+        const previewCard = document.getElementById('previewCard');
+        const generateBtn = document.getElementById('generateBtn');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function showStatus(message, type = 'info') {
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                             type === 'success' ? 'alert-success' : 'alert-info';
+            statusMessage.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+        }
+
+        function showProgress(percentage) {
+            progressBar.style.display = 'block';
+            progressBar.querySelector('.progress-bar').style.width = percentage + '%';
+        }
+
+        function hideProgress() {
+            progressBar.style.display = 'none';
+        }
+
+        function handleFile(file) {
+            selectedFile = file;
+            
+            // Validate file type
+            const validTypes = ['.csv', '.xlsx', '.xls'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validTypes.includes(fileExtension)) {
+                showStatus('Invalid file type. Please upload a CSV or Excel file.', 'error');
+                return;
+            }
+
+            // Upload and preview
+            uploadFile(file);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showProgress(10);
+            showStatus('Uploading and processing file...');
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                if (data.success) {
+                    showStatus('File uploaded successfully!', 'success');
+                    
+                    // Show preview
+                    document.getElementById('tableContainer').innerHTML = data.table_html;
+                    document.getElementById('columnCount').textContent = data.columns.length;
+                    document.getElementById('rowCount').textContent = data.row_count;
+                    previewCard.style.display = 'block';
+                } else {
+                    showStatus(data.error || 'Error uploading file', 'error');
+                }
+            })
+            .catch(error => {
+                hideProgress();
+                showStatus('Network error: ' + error.message, 'error');
+            });
+        }
+
+        // Generate presentation
+        generateBtn.addEventListener('click', () => {
+            if (!selectedFile) {
+                showStatus('Please select a file first.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            showProgress(20);
+            showStatus('Generating presentation... This may take a few minutes.');
+            generateBtn.disabled = true;
+
+            // Simulate progress
+            let progress = 20;
+            const progressInterval = setInterval(() => {
+                progress += 5;
+                if (progress < 90) {
+                    showProgress(progress);
+                }
+            }, 1000);
+
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                clearInterval(progressInterval);
+                showProgress(100);
+                
+                if (response.ok) {
+                    return response.blob();
+                } else {
+                    return response.json().then(data => Promise.reject(data));
+                }
+            })
+            .then(blob => {
+                hideProgress();
+                showStatus('Presentation generated successfully!', 'success');
+                
+                // Download file
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'PowerPoint_Generator.pptx';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                generateBtn.disabled = false;
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                hideProgress();
+                showStatus(error.error || 'Error generating presentation', 'error');
+                generateBtn.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>

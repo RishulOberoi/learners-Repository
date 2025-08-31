@@ -1,4 +1,4 @@
-import streamlit as st
+from flask import Flask, request, jsonify, send_file, render_template
 import pandas as pd
 import re
 import io
@@ -9,27 +9,36 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_PARAGRAPH_ALIGNMENT
 from PIL import Image
 import nltk
+import os
+from werkzeug.utils import secure_filename
 
-nltk.download('punkt')
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Download required NLTK data
+try:
+    nltk.download('punkt', quiet=True)
+except:
+    pass
+
 from transformers import pipeline
 
-@st.cache_resource
-def load_summarizer():
-    return pipeline("summarization", model="facebook/bart-large-cnn")
+# Global variables for models
+summarizer = None
+expander = None
 
-@st.cache_resource
-def load_expander():
-    return pipeline("text2text-generation", model="t5-base")
-
-summarizer = load_summarizer()
-expander = load_expander()
+def load_models():
+    global summarizer, expander
+    try:
+        summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+        expander = pipeline("text2text-generation", model="t5-base")
+    except Exception as e:
+        print(f"Error loading models: {e}")
 
 def remove_unwanted_phrases(text):
     unwanted_phrases = [
-        "For confidential support call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org.",
-        "For confidential support call the Samaritans on 08457 90 90, visit a local Samaritans branch or see www.samaritans.org.",
-        "For confidential support, call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org.",
-        "For confidential support, call the Samaritans on 08457 90 90, visit a local Samaritans branch or see www.samaritans.org.",
+        "For confidential support call the Samaritans on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org",
+        "For confidential support, call the Samaritans on 08457 90 90, visit a local Samaritans branch or see www.samaritans.org",
         "For confidential support call the Samaritans in the UK on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org for details.",
         "For confidential support, call the Samaritans in the UK on 08457 90 90 90, visit a local Samaritans branch or see www.samaritans.org for details.",
         "For confidential support call the Samaritans",
@@ -44,7 +53,10 @@ def remove_unwanted_phrases(text):
     return text.strip()
 
 def summarize_text(text):
+    global summarizer
     try:
+        if summarizer is None:
+            return remove_unwanted_phrases(text)
         summary = summarizer(
             text, max_length=300, min_length=100, length_penalty=0.9,
             no_repeat_ngram_size=3, do_sample=False
@@ -52,19 +64,22 @@ def summarize_text(text):
         result = summary[0]['summary_text'].strip()
         return remove_unwanted_phrases(result)
     except Exception as e:
-        st.warning(f"Summarization failed: {e}")
+        print(f"Summarization failed: {e}")
         return remove_unwanted_phrases(text)
 
 def expand_text(text):
+    global expander
     prompt = f"Provide a more detailed explanation: {text}"
     try:
+        if expander is None:
+            return remove_unwanted_phrases(text)
         expanded = expander(prompt, max_new_tokens=120, do_sample=False)
         result = expanded[0]['generated_text'].strip()
         if result.lower().startswith(prompt.lower()) or len(result) <= len(text) + 8:
             return remove_unwanted_phrases(text)
         return remove_unwanted_phrases(result)
     except Exception as e:
-        st.warning(f"Expansion failed: {e}")
+        print(f"Expansion failed: {e}")
         return remove_unwanted_phrases(text)
 
 def parse_content_to_bullets(text):
@@ -115,7 +130,7 @@ def add_image_autofit(slide, image_path, left_inches, top_inches, width_inches, 
             width=Inches(final_width), height=Inches(final_height)
         )
     except Exception as e:
-        st.warning(f"Could not add image {image_path}: {e}")
+        print(f"Could not add image {image_path}: {e}")
 
 def create_slide(prs, title, content_bullets, image_path=None):
     if not isinstance(title, str) or title.strip() == "" or pd.isna(title):
@@ -203,42 +218,84 @@ def decide_enrichment(title, content_raw):
     cleaned_text = remove_unwanted_phrases(content_raw)
     length = len(cleaned_text)
     if length < 80:
-        st.info(f"[{title}] Expanding short content ({length} chars).")
+        print(f"[{title}] Expanding short content ({length} chars).")
         return expand_text(cleaned_text)
     if length > 100:
-        st.info(f"[{title}] Summarizing long content ({length} chars).")
+        print(f"[{title}] Summarizing long content ({length} chars).")
         return summarize_text(cleaned_text)
-    st.info(f"[{title}] Using as-is ({length} chars).")
+    print(f"[{title}] Using as-is ({length} chars).")
     return cleaned_text
 
-# --- Streamlit APP UI ---
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-st.set_page_config(page_title="Powerpoint Generator", layout="wide")
-st.title("Powerpoint Generator – AI-Powered PPTX from Tabular Data")
-
-uploaded_file = st.file_uploader("Upload CSV or Excel for your slides", type=["csv", "xlsx"])
-
-if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        try:
-            df = pd.read_csv(uploaded_file, encoding='utf-8')
-        except UnicodeDecodeError:
-            uploaded_file.seek(0)
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if file.filename.endswith('.csv'):
             try:
-                df = pd.read_csv(uploaded_file, encoding='utf-16')
+                df = pd.read_csv(file, encoding='utf-8')
             except UnicodeDecodeError:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, encoding='latin1')
-    else:
-        df = pd.read_excel(uploaded_file)
+                file.seek(0)
+                try:
+                    df = pd.read_csv(file, encoding='utf-16')
+                except UnicodeDecodeError:
+                    file.seek(0)
+                    df = pd.read_csv(file, encoding='latin1')
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+        else:
+            return jsonify({'error': 'Invalid file format. Please upload CSV or Excel file.'}), 400
+        
+        df.columns = df.columns.str.strip()
+        
+        # Convert DataFrame to HTML for preview
+        table_html = df.head(10).to_html(classes='table table-striped', table_id='dataPreview')
+        
+        return jsonify({
+            'success': True,
+            'table_html': table_html,
+            'columns': list(df.columns),
+            'row_count': len(df)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
-    df.columns = df.columns.str.strip()
-    st.write("Table Preview:")
-    st.dataframe(df)
-
-    if st.button("Generate Powerpoint"):
+@app.route('/generate', methods=['POST'])
+def generate_presentation():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename.endswith('.csv'):
+            try:
+                df = pd.read_csv(file, encoding='utf-8')
+            except UnicodeDecodeError:
+                file.seek(0)
+                try:
+                    df = pd.read_csv(file, encoding='utf-16')
+                except UnicodeDecodeError:
+                    file.seek(0)
+                    df = pd.read_csv(file, encoding='latin1')
+        else:
+            df = pd.read_excel(file)
+        
+        df.columns = df.columns.str.strip()
+        
         prs = Presentation()
         cols_lower = set(c.lower() for c in df.columns)
+        
         if 'title' in cols_lower and 'content' in cols_lower:
             for idx, row in df.iterrows():
                 title_raw = row.get('Title') or row.get('title') or 'Untitled Slide'
@@ -272,15 +329,22 @@ if uploaded_file:
                 for c in range(cols):
                     table.cell(r + 1, c).text = str(df.iat[r, c])
 
-        pptx_file = "Powerpoint Generator.pptx"
+        # Save presentation
+        pptx_file = "PowerPoint_Generator.pptx"
         prs.save(pptx_file)
-        with open(pptx_file, "rb") as f:
-            st.download_button(
-                "Download Powerpoint",
-                f,
-                file_name=pptx_file,
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            )
-        st.success("Presentation generated and ready for download!")
+        
+        return send_file(
+            pptx_file,
+            as_attachment=True,
+            download_name="PowerPoint_Generator.pptx",
+            mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+    
+    except Exception as e:
+        return jsonify({'error': f'Error generating presentation: {str(e)}'}), 500
 
-st.caption("Expand, summarize, and generate *beautiful presentations* from structured data – fully within your browser.")
+if __name__ == '__main__':
+    print("Loading AI models... This may take a few minutes on first run.")
+    load_models()
+    print("✅ Models loaded successfully!")
+    app.run(debug=True, port=5000)

@@ -1,4 +1,4 @@
-flask
+streamlit
 pandas
 python-pptx
 pillow
